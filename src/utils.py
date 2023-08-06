@@ -17,7 +17,31 @@ class BuzzerPattern(Enum):
     TAMPER_ALERT = 4
 
 
-def gen_led_command(pattern: LEDPattern, reader_number: int = 0, led_number: int = 0):
+def send_pending_access_feedback(cp, address):
+    cp.send_command(address, _gen_led_command(LEDPattern.PENDING_ACCESS))
+
+
+def send_allow_access_feedback(cp, address):
+    cp.send_command(address, _gen_led_command(LEDPattern.ALLOW_ACCESS))
+    cp.send_command(address, _gen_buzzer_command(BuzzerPattern.ALLOW_ACCESS))
+
+
+def send_deny_access_feedback(cp, address):
+    cp.send_command(address, _gen_led_command(LEDPattern.DENY_ACCESS))
+    cp.send_command(address, _gen_buzzer_command(BuzzerPattern.DENY_ACCESS))
+
+
+def send_tamper_alert_feedback(cp, address):
+    cp.send_command(address, _gen_led_command(LEDPattern.TAMPER_ALERT))
+    cp.send_command(address, _gen_buzzer_command(BuzzerPattern.TAMPER_ALERT))
+
+
+def send_idle_feedback(cp, address):
+    cp.send_command(address, _gen_led_command(LEDPattern.IDLE))
+    cp.send_command(address, _gen_buzzer_command(BuzzerPattern.IDLE))
+
+
+def _gen_led_command(pattern: LEDPattern, reader_number: int = 0, led_number: int = 0):
     command = {
         "command": osdp.CMD_LED,
         "reader": reader_number,
@@ -88,7 +112,7 @@ def gen_led_command(pattern: LEDPattern, reader_number: int = 0, led_number: int
     return command
 
 
-def gen_buzzer_command(
+def _gen_buzzer_command(
     pattern: BuzzerPattern,
     reader_number: int = 0,
 ):

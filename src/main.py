@@ -3,12 +3,7 @@ import asyncio
 import logging
 import osdp
 
-from utils import (
-    LEDPattern,
-    BuzzerPattern,
-    gen_led_command,
-    gen_buzzer_command,
-)
+import utils
 
 
 # fmt: off
@@ -30,83 +25,77 @@ pd_info = [
     }
 ]
 
-PD_0 = 0
 
+class OSDPd:
+    PD_0 = 0
 
-async def handle_pd_state_change(cp, ready):
-    logging.info(f"PD state changed to: {ready}")
-    if ready:
-        cp.send_command(PD_0, gen_led_command(LEDPattern.IDLE))
-        cp.send_command(PD_0, gen_buzzer_command(BuzzerPattern.IDLE))
+    @classmethod
+    async def create(cls, pd_info):
+        self = OSDPd()
 
+        cp = osdp.ControlPanel(pd_info)
+        cp.set_loglevel(osdp.LOG_DEBUG)
+        cp.set_event_callback(self.handle_event)
+        self.cp = cp
 
-async def cp_refresh(cp):
-    connected = False
-    secured = False
-    ready = False
+        self.loop = asyncio.get_running_loop()
 
-    while True:
-        cp.refresh()
+        self.connected = False
+        self.secured = False
+        self.ready = False
 
-        if connected != cp.status():
-            connected = cp.status()
-        if secured != cp.sc_status():
-            secured = cp.sc_status()
-        if ready != (connected and secured):
-            ready = connected and secured
-            await handle_pd_state_change(cp, ready)
+        await self.refresh()
 
-        await asyncio.sleep(0.020)
+    def handle_event(self, address, event):
+        coro = self.dispatch_event(address, event)
+        asyncio.run_coroutine_threadsafe(coro, self.loop)
 
+    async def dispatch_event(self, address, event):
+        logging.debug(f"Address: {address} Event: {event}")
 
-async def process_card_read_event(cp, address, event):
-    cp.send_command(address, gen_led_command(LEDPattern.PENDING_ACCESS))
-    await asyncio.sleep(10)  # Simulate slow network call
+        if event["event"] == osdp.EVENT_CARDREAD:
+            await self.process_card_read_event(address, event)
+        elif event["event"] == osdp.EVENT_STATUS:
+            await self.process_status_event(address, event)
 
-    if event["data"] == b"\x12345":
-        cp.send_command(address, gen_led_command(LEDPattern.ALLOW_ACCESS))
-        cp.send_command(address, gen_buzzer_command(BuzzerPattern.ALLOW_ACCESS))
-    else:
-        cp.send_command(address, gen_led_command(LEDPattern.DENY_ACCESS))
-        cp.send_command(address, gen_buzzer_command(BuzzerPattern.DENY_ACCESS))
+    async def process_card_read_event(self, address, event):
+        await asyncio.to_thread(utils.send_pending_access_feedback, self.cp, address)
+        await asyncio.sleep(10)  # Simulate slow network call
 
+        if event["data"] == b"\x12345":
+            await asyncio.to_thread(utils.send_allow_access_feedback, self.cp, address)
+        else:
+            await asyncio.to_thread(utils.send_deny_access_feedback, self.cp, address)
 
-async def process_status_event(cp, address, event):
-    if event["tamper"] == 1:
-        cp.send_command(address, gen_led_command(LEDPattern.TAMPER_ALERT))
-        cp.send_command(address, gen_buzzer_command(BuzzerPattern.TAMPER_ALERT))
-    elif event["tamper"] == 0:
-        cp.send_command(address, gen_led_command(LEDPattern.IDLE))
-        cp.send_command(address, gen_buzzer_command(BuzzerPattern.IDLE))
+    async def process_status_event(self, address, event):
+        if event["tamper"] == 1:
+            await asyncio.to_thread(utils.send_tamper_alert_feedback, self.cp, address)
+        elif event["tamper"] == 0:
+            await asyncio.to_thread(utils.send_idle_feedback, self.cp, address)
 
+    async def refresh(self):
+        while True:
+            self.cp.refresh()
 
-async def dispatch_event(cp, address, event):
-    logging.debug(f"Address: {address} Event: {event}")
+            if self.connected != self.cp.status():
+                self.connected = self.cp.status()
+            if self.secured != self.cp.sc_status():
+                self.secured = self.cp.sc_status()
+            if self.ready != (self.connected and self.secured):
+                self.ready = self.connected and self.secured
+                await self.handle_pd_state_change()
 
-    if event["event"] == osdp.EVENT_CARDREAD:
-        await process_card_read_event(cp, address, event)
-    elif event["event"] == osdp.EVENT_STATUS:
-        await process_status_event(cp, address, event)
+            await asyncio.sleep(0.020)
+
+    async def handle_pd_state_change(self):
+        logging.info(f"PD state changed to: {self.ready}")
+        if self.ready:
+            await asyncio.to_thread(utils.send_idle_feedback, self.cp, OSDPd.PD_0)
 
 
 async def main():
     logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.DEBUG)
-
-    cp = osdp.ControlPanel(pd_info)
-
-    logging.info(f"pyosdp Version: {cp.get_version()} Info: {cp.get_source_info()}")
-    cp.set_loglevel(osdp.LOG_DEBUG)
-
-    def handle_event(address, event):
-        loop = asyncio.get_running_loop()
-        loop.create_task(dispatch_event(cp, address, event))
-
-    cp.set_event_callback(handle_event)
-
-    tasks = [
-        asyncio.create_task(cp_refresh(cp)),
-    ]
-    await asyncio.gather(*tasks, return_exceptions=True)
+    await OSDPd.create(pd_info)
 
 
 if __name__ == "__main__":
