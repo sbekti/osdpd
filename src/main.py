@@ -56,9 +56,14 @@ class OSDPd:
 
     async def process_card_read_event(self, address, event):
         await asyncio.to_thread(utils.send_pending_access_feedback, self.cp, address)
-        await asyncio.sleep(0.5)  # Simulate slow network call
+        await asyncio.sleep(9.2)  # Simulate slow network call
 
-        if event["data"] == b"\x12345":
+        data = event["data"]
+        length = event["length"]
+        hex_str = f"{(int.from_bytes(data) >> len(data) * 8 - length):x}"
+        logging.info(f"hex_str: {hex_str}, length: {length}")
+
+        if hex_str == "12345":
             await asyncio.to_thread(utils.send_allow_access_feedback, self.cp, address)
         else:
             await asyncio.to_thread(utils.send_deny_access_feedback, self.cp, address)

@@ -66,7 +66,7 @@ def _gen_led_command(pattern: LEDPattern, reader_number: int = 0, led_number: in
                 "control_code": 2,  # temporary
                 "on_count": 6,
                 "off_count": 6,
-                "on_color": 5,  # Purple
+                "on_color": osdp.LED_COLOR_AMBER,
                 "off_color": osdp.LED_COLOR_NONE,
                 "timer_count": 1000,
                 "temporary": True,
@@ -80,7 +80,7 @@ def _gen_led_command(pattern: LEDPattern, reader_number: int = 0, led_number: in
                 "off_count": 3,
                 "on_color": osdp.LED_COLOR_GREEN,
                 "off_color": osdp.LED_COLOR_GREEN,
-                "timer_count": 6,
+                "timer_count": 7,
                 "temporary": True,
             }
         )
@@ -92,7 +92,7 @@ def _gen_led_command(pattern: LEDPattern, reader_number: int = 0, led_number: in
                 "off_count": 1,
                 "on_color": osdp.LED_COLOR_RED,
                 "off_color": osdp.LED_COLOR_NONE,
-                "timer_count": 9,
+                "timer_count": 7,
                 "temporary": True,
             }
         )
@@ -133,8 +133,8 @@ def _gen_buzzer_command(
     elif pattern == BuzzerPattern.ALLOW_ACCESS:
         command.update(
             {
-                "on_count": 3,
-                "off_count": 1,
+                "on_count": 4,
+                "off_count": 0,
                 "rep_count": 1,
                 "control_code": 2,  # default tone
             }
